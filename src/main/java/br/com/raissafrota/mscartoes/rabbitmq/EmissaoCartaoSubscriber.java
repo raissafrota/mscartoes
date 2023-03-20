@@ -1,14 +1,42 @@
 package br.com.raissafrota.mscartoes.rabbitmq;
 
+import br.com.raissafrota.mscartoes.entity.Cartao;
+import br.com.raissafrota.mscartoes.entity.ClienteCartao;
+import br.com.raissafrota.mscartoes.entity.DadosSolicitacaoEmissaoCartao;
+import br.com.raissafrota.mscartoes.repository.CartaoRepository;
+import br.com.raissafrota.mscartoes.repository.ClienteCartaoRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
+@Slf4j
 public class EmissaoCartaoSubscriber {
+
+    private final CartaoRepository cartaoRepository;
+    private final ClienteCartaoRepository clienteCartaoRepository;
 
     @RabbitListener(queues = "${mq.queues.emissao-cartoes}")
     public void receberSolicitacaoEmissao(@Payload String payload){
-        System.out.println(payload);
+        try {
+            var mapper = new ObjectMapper();
+
+            DadosSolicitacaoEmissaoCartao dados = mapper.readValue(payload, DadosSolicitacaoEmissaoCartao.class);
+            Cartao cartao = cartaoRepository.findById(dados.getIdCartao()).orElseThrow();
+
+            ClienteCartao clienteCartao = new ClienteCartao();
+            clienteCartao.setCartao(cartao);
+            clienteCartao.setCpf(dados.getCpf());
+            clienteCartao.setLimiteLiberado(dados.getLimiteLiberado());
+
+            clienteCartaoRepository.save(clienteCartao);
+
+        }catch (Exception e){
+            log.error("Erro ao receber solicitação de emissão de cartão: {} ", e.getMessage());
+        }
     }
 }
